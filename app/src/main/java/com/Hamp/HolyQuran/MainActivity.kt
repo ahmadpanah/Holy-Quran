@@ -286,13 +286,22 @@ fun VerseListScreen(
     var currentVerseIndex by remember { mutableStateOf(0) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
 
+    // Reciter selection
+    val reciters = listOf(
+        Reciter(1, "مشاري بن راشد العفاسي"),
+        Reciter(2, "أبو بكر الشاطري"),
+        Reciter(3, "ناصر القطامي")
+    )
+    var selectedReciter by remember { mutableStateOf(reciters.first()) } // Default to first reciter
+    var isDropdownExpanded by remember { mutableStateOf(false) } // Dropdown expanded state
+
     // Dynamic text color based on dark mode
     val textColor = if (isDarkMode) Color.White else Color.Black
 
-    LaunchedEffect(isPlaying, currentVerseIndex) {
+    LaunchedEffect(isPlaying, currentVerseIndex, selectedReciter) {
         if (isPlaying) {
             val verse = selectedSurah?.verses?.getOrNull(currentVerseIndex) ?: return@LaunchedEffect
-            val audioUrl = "https://quranaudio.pages.dev/2/${selectedSurah.id}_${verse.id}.mp3"
+            val audioUrl = "https://quranaudio.pages.dev/${selectedReciter.id}/${selectedSurah.id}_${verse.id}.mp3"
 
             mediaPlayer?.stop()
             mediaPlayer?.release()
@@ -364,9 +373,38 @@ fun VerseListScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(8.dp),
-                    horizontalArrangement = Arrangement.Center,
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Reciter selection dropdown
+                    ExposedDropdownMenuBox(
+                        expanded = isDropdownExpanded,
+                        onExpandedChange = { isDropdownExpanded = !isDropdownExpanded }
+                    ) {
+                        Text(
+                            text = selectedReciter.name,
+                            modifier = Modifier
+                                .menuAnchor()
+                                .clickable { isDropdownExpanded = true },
+                            color = textColor
+                        )
+                        DropdownMenu(
+                            expanded = isDropdownExpanded,
+                            onDismissRequest = { isDropdownExpanded = false }
+                        ) {
+                            reciters.forEach { reciter ->
+                                DropdownMenuItem(
+                                    text = { Text(text = reciter.name) },
+                                    onClick = {
+                                        selectedReciter = reciter
+                                        isDropdownExpanded = false // Collapse the dropdown
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Play/Pause button
                     IconButton(
                         onClick = {
                             if (isPlaying) {
@@ -407,6 +445,12 @@ fun VerseListScreen(
     }
 }
 
+// Data class for Reciter
+data class Reciter(
+    val id: Int,
+    val name: String
+)
+
 @Composable
 fun VerseItemWithAudio(
     verse: Verse,
@@ -445,48 +489,6 @@ fun VerseItem(verse: Verse, fontSize: TextUnit, fontFamily: FontFamily, textColo
         lineHeight = fontSize.value * 1.5.sp,
         textAlign = TextAlign.Right,
         color = textColor, // Dynamic text color
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    )
-}
-
-@Composable
-fun VerseItemWithAudio(
-    verse: Verse,
-    fontSize: TextUnit,
-    fontFamily: FontFamily,
-    isCurrentVerse: Boolean
-) {
-    // Animate text color
-    val textColor by animateColorAsState(
-        targetValue = if (isCurrentVerse) Color.Blue else Color.Black,
-        label = "textColorAnimation"
-    )
-
-    Text(
-        text = verse.text,
-        fontSize = fontSize,
-        fontFamily = fontFamily,
-        fontStyle = FontStyle.Normal,
-        lineHeight = fontSize.value * 1.5.sp,
-        textAlign = TextAlign.Right,
-        color = textColor, // Animated text color
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    )
-}
-
-@Composable
-fun VerseItem(verse: Verse, fontSize: TextUnit, fontFamily: FontFamily) {
-    Text(
-        text = verse.text,
-        fontSize = fontSize,
-        fontFamily = fontFamily,
-        fontStyle = FontStyle.Normal,
-        lineHeight = fontSize.value * 1.5.sp,
-        textAlign = TextAlign.Right, // Align text to the right
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)

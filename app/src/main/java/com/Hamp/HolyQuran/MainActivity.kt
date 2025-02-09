@@ -12,18 +12,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Brightness4
-import androidx.compose.material.icons.filled.Brightness7
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Remove
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +28,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,16 +38,79 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.google.gson.Gson
+import kotlinx.coroutines.launch
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.GET
+import retrofit2.http.Path
+import retrofit2.http.Query
 import java.io.InputStreamReader
+
+// API related data classes
+data class TranslatorResponse(
+    val code: Int,
+    val status: String,
+    val data: List<Translator>
+)
+
+data class Translator(
+    val identifier: String,
+    val language: String,
+    val name: String,
+    val englishName: String
+)
+
+data class TranslationResponse(
+    val code: Int,
+    val status: String,
+    val data: TranslationData
+)
+
+data class TranslationData(
+    val number: Int,
+    val name: String,
+    val englishName: String,
+    val ayahs: List<TranslatedVerse>
+)
+
+data class TranslatedVerse(
+    val number: Int,
+    val text: String
+)
+
+// API Service interface
+interface QuranTranslationService {
+    @GET("edition")
+    suspend fun getTranslators(
+        @Query("format") format: String = "text",
+        @Query("language") language: String = "fa"
+    ): TranslatorResponse
+
+    @GET("surah/{surahNumber}/{translator}")
+    suspend fun getTranslation(
+        @Path("surahNumber") surahNumber: Int,
+        @Path("translator") translator: String
+    ): TranslationResponse
+}
+
+// Retrofit client
+object RetrofitClient {
+    private const val BASE_URL = "https://api.alquran.cloud/v1/"
+
+    private val retrofit = Retrofit.Builder()
+        .baseUrl(BASE_URL)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+
+    val translationService: QuranTranslationService =
+        retrofit.create(QuranTranslationService::class.java)
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            // State for managing dark mode
             var isDarkMode by remember { mutableStateOf(false) }
-
-            // Dynamic theme based on dark mode state
             val dynamicTheme = if (isDarkMode) darkColorScheme() else lightColorScheme()
 
             MaterialTheme(
@@ -86,7 +141,27 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Function to load Quran data
+// Data classes for Quran content
+data class Surah(
+    val id: Int,
+    val name: String,
+    val transliteration: String,
+    val type: String,
+    val total_verses: Int,
+    val verses: List<Verse>
+)
+
+data class Verse(
+    val id: Int,
+    val text: String
+)
+
+data class Reciter(
+    val id: Int,
+    val name: String
+)
+
+// Function to load Quran data from assets
 fun loadQuranData(context: Context): List<Surah> {
     return try {
         val inputStream = context.assets.open("quran.json")
@@ -98,21 +173,6 @@ fun loadQuranData(context: Context): List<Surah> {
     }
 }
 
-// Data classes
-data class Surah(
-    val id: Int,
-    val name: String,
-    val transliteration: String,
-    val type: String,
-    val total_verses: Int,
-    val verses: List<Verse>
-)
-
-data class Verse(
-    val id: Int, // Verse number (not displayed in UI)
-    val text: String
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SurahListScreen(
@@ -121,26 +181,23 @@ fun SurahListScreen(
     onThemeChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    val surahs = remember { loadQuranData(context) } // Cache Quran data
+    val surahs = remember { loadQuranData(context) }
     val uthmanTahaFont = remember { FontFamily(Font(context.resources.getIdentifier("taha", "font", context.packageName))) }
+    val vazirFont = remember { FontFamily(Font(context.resources.getIdentifier("vazir", "font", context.packageName))) }
 
-    // Search query state
     var searchQuery by remember { mutableStateOf("") }
-
-    // Sorting state (true = ascending, false = descending)
     var isAscending by remember { mutableStateOf(true) }
 
-    // Filtered and sorted surahs
     val filteredSurahs = remember(searchQuery, isAscending) {
         val filtered = if (searchQuery.isEmpty()) {
             surahs
         } else {
-            surahs.filter { it.name.contains(searchQuery, ignoreCase = true) || it.transliteration.contains(searchQuery, ignoreCase = true) }
+            surahs.filter { it.name.contains(searchQuery, ignoreCase = true) ||
+                    it.transliteration.contains(searchQuery, ignoreCase = true) }
         }
         if (isAscending) filtered.sortedBy { it.id } else filtered.sortedByDescending { it.id }
     }
 
-    // Dynamic text color based on dark mode
     val textColor = if (isDarkMode) Color.White else Color.Black
 
     Scaffold(
@@ -152,32 +209,31 @@ fun SurahListScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Icons on the left side
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Start
                         ) {
                             IconButton(onClick = { onThemeChange(!isDarkMode) }) {
                                 Icon(
-                                    imageVector = if (isDarkMode) Icons.Default.Brightness7 else Icons.Default.Brightness4,
+                                    imageVector = if (isDarkMode) Icons.Default.Brightness7
+                                    else Icons.Default.Brightness4,
                                     contentDescription = "Toggle Theme"
                                 )
                             }
                             IconButton(onClick = { isAscending = !isAscending }) {
                                 Icon(
                                     imageVector = Icons.Default.Sort,
-                                    contentDescription = "Sort Ascending/Descending"
+                                    contentDescription = "Sort"
                                 )
                             }
                         }
-                        // Title on the right side
                         Text(
                             text = "آوای وحی",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             textAlign = TextAlign.Right,
-                            fontFamily = uthmanTahaFont,
-                            color = textColor, // Dynamic text color
+                            fontFamily = vazirFont,
+                            color = textColor,
                             modifier = Modifier.padding(end = 16.dp)
                         )
                     }
@@ -191,7 +247,6 @@ fun SurahListScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            // Search Bar (RTL-aligned and centered)
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -200,24 +255,24 @@ fun SurahListScreen(
                     Text(
                         text = "جستجوی نام سوره",
                         textAlign = TextAlign.Right,
-                        style = TextStyle(fontFamily = uthmanTahaFont, color = textColor), // Dynamic text color
+                        style = TextStyle(fontFamily = vazirFont, color = textColor,textDirection = TextDirection.Content),
                         modifier = Modifier.fillMaxWidth()
                     )
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 textStyle = TextStyle(
                     textAlign = TextAlign.Right,
-                    fontFamily = uthmanTahaFont,
-                    color = textColor // Dynamic text color
+                    fontFamily = vazirFont,
+                    textDirection = TextDirection.Content,
+                    color = textColor
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
             )
 
-            // Grid of Surahs
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Fixed(3),
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.Center,
                 verticalArrangement = Arrangement.Top
@@ -230,39 +285,6 @@ fun SurahListScreen(
     }
 }
 
-@Composable
-fun SurahItem(surah: Surah, navController: NavController, textColor: Color) {
-    val context = LocalContext.current
-    val uthmanTahaFont = remember { FontFamily(Font(context.resources.getIdentifier("taha", "font", context.packageName))) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(8.dp)
-            .clickable {
-                navController.navigate("verse_list/${surah.id}")
-            },
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = surah.name,
-            fontSize = 16.sp,
-            fontFamily = uthmanTahaFont,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            color = textColor, // Dynamic text color
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-            text = surah.transliteration,
-            fontSize = 12.sp,
-            fontStyle = FontStyle.Italic,
-            textAlign = TextAlign.Center,
-            color = textColor.copy(alpha = 0.7f) // Slightly transparent for transliteration
-        )
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VerseListScreen(
@@ -272,32 +294,63 @@ fun VerseListScreen(
     onThemeChange: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    val surahs = remember { loadQuranData(context) } // Cache Quran data
+    val scope = rememberCoroutineScope()
+    val surahs = remember { loadQuranData(context) }
     val uthmanTahaFont = remember { FontFamily(Font(context.resources.getIdentifier("taha", "font", context.packageName))) }
+    val vazirFont = remember { FontFamily(Font(context.resources.getIdentifier("vazir", "font", context.packageName))) }
 
-    // Find the selected surah safely
+
     val selectedSurah = surahId?.let { id -> surahs.find { it.id == id } }
-
-    // Font size state for verses
     var fontSize by remember { mutableStateOf(18.sp) }
 
-    // Media player state
+    // Translation states
+    var translators by remember { mutableStateOf<List<Translator>>(emptyList()) }
+    var selectedTranslator by remember { mutableStateOf<Translator?>(null) }
+    var translations by remember { mutableStateOf<List<TranslatedVerse>>(emptyList()) }
+    var isTranslatorDropdownExpanded by remember { mutableStateOf(false) }
+
+    // Audio states
     var isPlaying by remember { mutableStateOf(false) }
     var currentVerseIndex by remember { mutableStateOf(0) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
 
-    // Reciter selection
     val reciters = listOf(
         Reciter(1, "مشاري بن راشد العفاسي"),
         Reciter(2, "أبو بكر الشاطري"),
         Reciter(3, "ناصر القطامي")
     )
-    var selectedReciter by remember { mutableStateOf(reciters.first()) } // Default to first reciter
-    var isDropdownExpanded by remember { mutableStateOf(false) } // Dropdown expanded state
+    var selectedReciter by remember { mutableStateOf(reciters.first()) }
+    var isReciterDropdownExpanded by remember { mutableStateOf(false) }
 
-    // Dynamic text color based on dark mode
     val textColor = if (isDarkMode) Color.White else Color.Black
 
+    // Fetch translators
+    LaunchedEffect(Unit) {
+        try {
+            val response = RetrofitClient.translationService.getTranslators()
+            translators = response.data
+            selectedTranslator = translators.firstOrNull()
+        } catch (e: Exception) {
+            // Handle error
+        }
+    }
+
+    // Fetch translations when translator changes
+    LaunchedEffect(selectedTranslator, surahId) {
+        selectedTranslator?.let { translator ->
+            try {
+                val response = RetrofitClient.translationService.getTranslation(
+                    surahId ?: 1,
+                    translator.identifier
+                )
+                translations = response.data.ayahs
+            } catch (e: Exception) {
+                // Handle error
+            }
+        }
+    }
+
+    // Audio playback effect
     LaunchedEffect(isPlaying, currentVerseIndex, selectedReciter) {
         if (isPlaying) {
             val verse = selectedSurah?.verses?.getOrNull(currentVerseIndex) ?: return@LaunchedEffect
@@ -337,7 +390,7 @@ fun VerseListScreen(
                             fontSize = 18.sp,
                             textAlign = TextAlign.Center,
                             fontFamily = uthmanTahaFont,
-                            color = textColor // Dynamic text color
+                            color = textColor
                         )
                     }
                 },
@@ -349,7 +402,8 @@ fun VerseListScreen(
                 actions = {
                     IconButton(onClick = { onThemeChange(!isDarkMode) }) {
                         Icon(
-                            imageVector = if (isDarkMode) Icons.Default.Brightness7 else Icons.Default.Brightness4,
+                            imageVector = if (isDarkMode) Icons.Default.Brightness7
+                            else Icons.Default.Brightness4,
                             contentDescription = "Toggle Theme"
                         )
                     }
@@ -368,57 +422,102 @@ fun VerseListScreen(
             )
         },
         bottomBar = {
-            BottomAppBar {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            Column {
+                // Translation selector
+                ExposedDropdownMenuBox(
+                    expanded = isTranslatorDropdownExpanded,
+                    onExpandedChange = { isTranslatorDropdownExpanded = !isTranslatorDropdownExpanded }
                 ) {
-                    // Reciter selection dropdown
-                    ExposedDropdownMenuBox(
-                        expanded = isDropdownExpanded,
-                        onExpandedChange = { isDropdownExpanded = !isDropdownExpanded }
+                    TextField(
+                        value = selectedTranslator?.name ?: "انتخاب ترجمه",
+                        onValueChange = {},
+                        readOnly = true,
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = isTranslatorDropdownExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    )
+                    ExposedDropdownMenu(
+                        expanded = isTranslatorDropdownExpanded,
+                        onDismissRequest = { isTranslatorDropdownExpanded = false }
                     ) {
-                        Text(
-                            text = selectedReciter.name,
-                            modifier = Modifier
-                                .menuAnchor()
-                                .clickable { isDropdownExpanded = true },
-                            color = textColor
-                        )
-                        DropdownMenu(
-                            expanded = isDropdownExpanded,
-                            onDismissRequest = { isDropdownExpanded = false }
-                        ) {
-                            reciters.forEach { reciter ->
-                                DropdownMenuItem(
-                                    text = { Text(text = reciter.name) },
-                                    onClick = {
-                                        selectedReciter = reciter
-                                        isDropdownExpanded = false // Collapse the dropdown
+                        translators.forEach { translator ->
+                            DropdownMenuItem(
+                                text = { Text(translator.name) },
+                                onClick = {
+                                    selectedTranslator = translator
+                                    isTranslatorDropdownExpanded = false
+                                    scope.launch {
+                                        try {
+                                            val response = RetrofitClient.translationService.getTranslation(
+                                                surahId ?: 1,
+                                                translator.identifier
+                                            )
+                                            translations = response.data.ayahs
+                                        } catch (e: Exception) {
+                                            // Handle error
+                                        }
                                     }
-                                )
-                            }
+                                }
+                            )
                         }
                     }
+                }
 
-                    // Play/Pause button
-                    IconButton(
-                        onClick = {
-                            if (isPlaying) {
-                                isPlaying = false
-                            } else {
-                                isPlaying = true
-                                currentVerseIndex = 0 // Start from the first verse
+                // Audio controls
+                BottomAppBar {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Reciter selection dropdown
+                        ExposedDropdownMenuBox(
+                            expanded = isReciterDropdownExpanded,
+                            onExpandedChange = { isReciterDropdownExpanded = !isReciterDropdownExpanded }
+                        ) {
+                            Text(
+                                text = selectedReciter.name,
+                                modifier = Modifier
+                                    .menuAnchor()
+                                    .clickable { isReciterDropdownExpanded = true },
+                                color = textColor
+                            )
+                            DropdownMenu(
+                                expanded = isReciterDropdownExpanded,
+                                onDismissRequest = { isReciterDropdownExpanded = false }
+                            ) {
+                                reciters.forEach { reciter ->
+                                    DropdownMenuItem(
+                                        text = { Text(text = reciter.name) },
+                                        onClick = {
+                                            selectedReciter = reciter
+                                            isReciterDropdownExpanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
-                    ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play"
-                        )
+
+                        // Play/Pause button
+                        IconButton(
+                            onClick = {
+                                if (isPlaying) {
+                                    isPlaying = false
+                                } else {
+                                    isPlaying = true
+                                    currentVerseIndex = 0
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (isPlaying) "Pause" else "Play"
+                            )
+                        }
                     }
                 }
             }
@@ -432,8 +531,9 @@ fun VerseListScreen(
         ) {
             selectedSurah?.verses?.forEachIndexed { index, verse ->
                 item {
-                    VerseItemWithAudio(
+                    VerseItemWithTranslation(
                         verse = verse,
+                        translation = translations.getOrNull(index)?.text,
                         fontSize = fontSize,
                         fontFamily = uthmanTahaFont,
                         isCurrentVerse = currentVerseIndex == index,
@@ -445,52 +545,79 @@ fun VerseListScreen(
     }
 }
 
-// Data class for Reciter
-data class Reciter(
-    val id: Int,
-    val name: String
-)
+@Composable
+fun SurahItem(surah: Surah, navController: NavController, textColor: Color) {
+    val context = LocalContext.current
+    val uthmanTahaFont = remember { FontFamily(Font(context.resources.getIdentifier("taha", "font", context.packageName))) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .clickable {
+                navController.navigate("verse_list/${surah.id}")
+            },
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = surah.name,
+            fontSize = 16.sp,
+            fontFamily = uthmanTahaFont,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            color = textColor
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = surah.transliteration,
+            fontSize = 12.sp,
+            fontStyle = FontStyle.Italic,
+            textAlign = TextAlign.Center,
+            color = textColor.copy(alpha = 0.7f)
+        )
+    }
+}
 
 @Composable
-fun VerseItemWithAudio(
+fun VerseItemWithTranslation(
     verse: Verse,
+    translation: String?,
     fontSize: TextUnit,
     fontFamily: FontFamily,
     isCurrentVerse: Boolean,
     textColor: Color
 ) {
-    // Animate text color
-    val animatedTextColor by animateColorAsState(
-        targetValue = if (isCurrentVerse) Color.Blue else textColor,
-        label = "textColorAnimation"
-    )
-
-    Text(
-        text = verse.text,
-        fontSize = fontSize,
-        fontFamily = fontFamily,
-        fontStyle = FontStyle.Normal,
-        lineHeight = fontSize.value * 1.5.sp,
-        textAlign = TextAlign.Right,
-        color = animatedTextColor, // Animated text color
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    )
-}
+            .padding(vertical = 8.dp)
+    ) {
+        // Arabic verse
+        Text(
+            text = verse.text,
+            fontSize = fontSize,
+            fontFamily = fontFamily,
+            fontStyle = FontStyle.Normal,
+            lineHeight = fontSize.value * 1.5.sp,
+            textAlign = TextAlign.Right,
+            style = TextStyle(textDirection = TextDirection.Content),
+            color = if (isCurrentVerse) Color.Blue else textColor,
+            modifier = Modifier.fillMaxWidth()
+        )
 
-@Composable
-fun VerseItem(verse: Verse, fontSize: TextUnit, fontFamily: FontFamily, textColor: Color) {
-    Text(
-        text = verse.text,
-        fontSize = fontSize,
-        fontFamily = fontFamily,
-        fontStyle = FontStyle.Normal,
-        lineHeight = fontSize.value * 1.5.sp,
-        textAlign = TextAlign.Right,
-        color = textColor, // Dynamic text color
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    )
+        // Translation
+        translation?.let { translatedText ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = translatedText,
+                fontSize = fontSize * 0.8f,
+                fontStyle = FontStyle.Normal,
+                lineHeight = fontSize.value * 1.2.sp,
+                textAlign = TextAlign.Right,
+                style = TextStyle(textDirection = TextDirection.Content),
+                color = textColor.copy(alpha = 0.8f),
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
 }

@@ -1,6 +1,7 @@
 package com.Hamp.HolyQuran
 
 import android.content.Context
+import android.media.MediaPlayer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +19,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Brightness4
 import androidx.compose.material.icons.filled.Brightness7
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sort
@@ -137,13 +140,16 @@ fun SurahListScreen(
         if (isAscending) filtered.sortedBy { it.id } else filtered.sortedByDescending { it.id }
     }
 
+    // Dynamic text color based on dark mode
+    val textColor = if (isDarkMode) Color.White else Color.Black
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween, // Align items to opposite ends
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Icons on the left side
@@ -164,7 +170,6 @@ fun SurahListScreen(
                                 )
                             }
                         }
-
                         // Title on the right side
                         Text(
                             text = "آوای وحی",
@@ -172,7 +177,8 @@ fun SurahListScreen(
                             fontSize = 18.sp,
                             textAlign = TextAlign.Right,
                             fontFamily = uthmanTahaFont,
-                            modifier = Modifier.padding(end = 16.dp) // Add padding for spacing
+                            color = textColor, // Dynamic text color
+                            modifier = Modifier.padding(end = 16.dp)
                         )
                     }
                 }
@@ -193,16 +199,16 @@ fun SurahListScreen(
                 placeholder = {
                     Text(
                         text = "جستجوی نام سوره",
-                        textAlign = TextAlign.Right, // Align placeholder text to the right
-                        style = TextStyle(fontFamily = uthmanTahaFont),
-                        modifier = Modifier.fillMaxWidth() // Ensure full width for RTL alignment
+                        textAlign = TextAlign.Right,
+                        style = TextStyle(fontFamily = uthmanTahaFont, color = textColor), // Dynamic text color
+                        modifier = Modifier.fillMaxWidth()
                     )
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { /* Handle search action */ }),
                 textStyle = TextStyle(
-                    textAlign = TextAlign.Right, // Align input text to the right
-                    fontFamily = uthmanTahaFont
+                    textAlign = TextAlign.Right,
+                    fontFamily = uthmanTahaFont,
+                    color = textColor // Dynamic text color
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
@@ -211,13 +217,13 @@ fun SurahListScreen(
 
             // Grid of Surahs
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2), // 2-column grid
+                columns = GridCells.Fixed(2),
                 modifier = Modifier.fillMaxSize(),
-                horizontalArrangement = Arrangement.Center, // Centerize grid items
+                horizontalArrangement = Arrangement.Center,
                 verticalArrangement = Arrangement.Top
             ) {
                 items(filteredSurahs) { surah ->
-                    SurahItem(surah, navController)
+                    SurahItem(surah, navController, textColor)
                 }
             }
         }
@@ -225,7 +231,7 @@ fun SurahListScreen(
 }
 
 @Composable
-fun SurahItem(surah: Surah, navController: NavController) {
+fun SurahItem(surah: Surah, navController: NavController, textColor: Color) {
     val context = LocalContext.current
     val uthmanTahaFont = remember { FontFamily(Font(context.resources.getIdentifier("taha", "font", context.packageName))) }
 
@@ -234,26 +240,25 @@ fun SurahItem(surah: Surah, navController: NavController) {
             .fillMaxWidth()
             .padding(8.dp)
             .clickable {
-                // Navigate to the verse list screen for the selected surah
                 navController.navigate("verse_list/${surah.id}")
             },
-        horizontalAlignment = Alignment.CenterHorizontally // Centerize each item
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = surah.name,
             fontSize = 16.sp,
             fontFamily = uthmanTahaFont,
             fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center, // Centerize text
-            color = MaterialTheme.colorScheme.primary
+            textAlign = TextAlign.Center,
+            color = textColor, // Dynamic text color
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
             text = surah.transliteration,
             fontSize = 12.sp,
             fontStyle = FontStyle.Italic,
-            textAlign = TextAlign.Center, // Centerize text
-            color = Color.Gray
+            textAlign = TextAlign.Center,
+            color = textColor.copy(alpha = 0.7f) // Slightly transparent for transliteration
         )
     }
 }
@@ -276,6 +281,39 @@ fun VerseListScreen(
     // Font size state for verses
     var fontSize by remember { mutableStateOf(18.sp) }
 
+    // Media player state
+    var isPlaying by remember { mutableStateOf(false) }
+    var currentVerseIndex by remember { mutableStateOf(0) }
+    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+
+    // Dynamic text color based on dark mode
+    val textColor = if (isDarkMode) Color.White else Color.Black
+
+    LaunchedEffect(isPlaying, currentVerseIndex) {
+        if (isPlaying) {
+            val verse = selectedSurah?.verses?.getOrNull(currentVerseIndex) ?: return@LaunchedEffect
+            val audioUrl = "https://quranaudio.pages.dev/2/${selectedSurah.id}_${verse.id}.mp3"
+
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(audioUrl)
+                prepareAsync()
+                setOnPreparedListener { start() }
+                setOnCompletionListener {
+                    if (currentVerseIndex < (selectedSurah.verses.size - 1)) {
+                        currentVerseIndex++
+                    } else {
+                        isPlaying = false
+                    }
+                }
+            }
+        } else {
+            mediaPlayer?.pause()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -289,15 +327,13 @@ fun VerseListScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             textAlign = TextAlign.Center,
-                            fontFamily = uthmanTahaFont
+                            fontFamily = uthmanTahaFont,
+                            color = textColor // Dynamic text color
                         )
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = {
-                        // Navigate back to the previous screen
-                        navController.navigateUp()
-                    }) {
+                    IconButton(onClick = { navController.navigateUp() }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -321,6 +357,33 @@ fun VerseListScreen(
                     }
                 }
             )
+        },
+        bottomBar = {
+            BottomAppBar {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(
+                        onClick = {
+                            if (isPlaying) {
+                                isPlaying = false
+                            } else {
+                                isPlaying = true
+                                currentVerseIndex = 0 // Start from the first verse
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play"
+                        )
+                    }
+                }
+            }
         }
     ) { padding ->
         LazyColumn(
@@ -329,13 +392,90 @@ fun VerseListScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
-            selectedSurah?.verses?.forEach { verse ->
+            selectedSurah?.verses?.forEachIndexed { index, verse ->
                 item {
-                    VerseItem(verse, fontSize, uthmanTahaFont)
+                    VerseItemWithAudio(
+                        verse = verse,
+                        fontSize = fontSize,
+                        fontFamily = uthmanTahaFont,
+                        isCurrentVerse = currentVerseIndex == index,
+                        textColor = textColor
+                    )
                 }
             }
         }
     }
+}
+
+@Composable
+fun VerseItemWithAudio(
+    verse: Verse,
+    fontSize: TextUnit,
+    fontFamily: FontFamily,
+    isCurrentVerse: Boolean,
+    textColor: Color
+) {
+    // Animate text color
+    val animatedTextColor by animateColorAsState(
+        targetValue = if (isCurrentVerse) Color.Blue else textColor,
+        label = "textColorAnimation"
+    )
+
+    Text(
+        text = verse.text,
+        fontSize = fontSize,
+        fontFamily = fontFamily,
+        fontStyle = FontStyle.Normal,
+        lineHeight = fontSize.value * 1.5.sp,
+        textAlign = TextAlign.Right,
+        color = animatedTextColor, // Animated text color
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    )
+}
+
+@Composable
+fun VerseItem(verse: Verse, fontSize: TextUnit, fontFamily: FontFamily, textColor: Color) {
+    Text(
+        text = verse.text,
+        fontSize = fontSize,
+        fontFamily = fontFamily,
+        fontStyle = FontStyle.Normal,
+        lineHeight = fontSize.value * 1.5.sp,
+        textAlign = TextAlign.Right,
+        color = textColor, // Dynamic text color
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    )
+}
+
+@Composable
+fun VerseItemWithAudio(
+    verse: Verse,
+    fontSize: TextUnit,
+    fontFamily: FontFamily,
+    isCurrentVerse: Boolean
+) {
+    // Animate text color
+    val textColor by animateColorAsState(
+        targetValue = if (isCurrentVerse) Color.Blue else Color.Black,
+        label = "textColorAnimation"
+    )
+
+    Text(
+        text = verse.text,
+        fontSize = fontSize,
+        fontFamily = fontFamily,
+        fontStyle = FontStyle.Normal,
+        lineHeight = fontSize.value * 1.5.sp,
+        textAlign = TextAlign.Right,
+        color = textColor, // Animated text color
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    )
 }
 
 @Composable

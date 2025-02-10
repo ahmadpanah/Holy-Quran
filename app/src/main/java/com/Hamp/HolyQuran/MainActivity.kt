@@ -1,6 +1,7 @@
 package com.Hamp.HolyQuran
 
 import android.content.Context
+import android.content.Intent
 import android.media.MediaPlayer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -587,37 +588,78 @@ fun VerseItemWithTranslation(
     isCurrentVerse: Boolean,
     textColor: Color
 ) {
-    Column(
+    val context = LocalContext.current
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
     ) {
-        // Arabic verse
-        Text(
-            text = verse.text,
-            fontSize = fontSize,
-            fontFamily = fontFamily,
-            fontStyle = FontStyle.Normal,
-            lineHeight = fontSize.value * 1.5.sp,
-            textAlign = TextAlign.Right,
-            style = TextStyle(textDirection = TextDirection.Content),
-            color = if (isCurrentVerse) Color.Blue else textColor,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // Share Icon
+        IconButton(
+            onClick = {
+                val shareText = buildString {
+                    append(verse.text)
+                    translation?.let { translatedText ->
+                        append("\n\n")
+                        append(translatedText)
+                    }
+                }
 
-        // Translation
-        translation?.let { translatedText ->
-            Spacer(modifier = Modifier.height(4.dp))
+                val shareIntent = Intent().apply {
+                    action = Intent.ACTION_SEND
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, shareText)
+                }
+
+                context.startActivity(Intent.createChooser(shareIntent, "اشتراک گذاری آیه"))
+            },
+            modifier = Modifier
+                .padding(top = 8.dp)
+                .size(24.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Share,
+                contentDescription = "Share verse",
+                tint = textColor.copy(alpha = 0.4f)
+            )
+        }
+
+        // Verse Content
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 8.dp)
+        ) {
+            // Arabic verse
             Text(
-                text = translatedText,
-                fontSize = fontSize * 0.8f,
+                text = verse.text,
+                fontSize = fontSize,
+                fontFamily = fontFamily,
                 fontStyle = FontStyle.Normal,
-                lineHeight = fontSize.value * 1.2.sp,
+                lineHeight = fontSize.value * 1.5.sp,
                 textAlign = TextAlign.Right,
                 style = TextStyle(textDirection = TextDirection.Content),
-                color = textColor.copy(alpha = 0.8f),
+                color = if (isCurrentVerse) Color.Blue else textColor,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // Translation
+            translation?.let { translatedText ->
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = translatedText,
+                    fontSize = fontSize * 0.8f,
+                    fontStyle = FontStyle.Normal,
+                    lineHeight = fontSize.value * 1.2.sp,
+                    textAlign = TextAlign.Right,
+                    style = TextStyle(textDirection = TextDirection.Content),
+                    color = textColor.copy(alpha = 0.8f),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }

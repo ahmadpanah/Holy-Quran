@@ -36,6 +36,9 @@ A modern design with a simple user interface that makes the app enjoyable to use
 ### 7. **High Speed and Performance**  
 Optimized for fast loading and instant responsiveness, even on lower-end devices.
 
+### 8. **Share Verse in Another Applications**
+The shared content will include both the Arabic verse and its translation (if available) separated by a line break.
+
 ---
 
 ## About the Project:

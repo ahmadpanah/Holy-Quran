@@ -21,19 +21,22 @@ Using advanced search functionality, you can quickly find the desired Surahs and
 ### 2. **Audio Playback with Text Highlighting**  
 When you choose to play the reciter's audio, the text being recited will be highlighted.
 
-### 3. **Text Size Adjustment**  
+### 3.**Verse-by-Verse Translations**
+In this new version, verse-by-verse translations by 13 Persian translators have been added, including renowned scholars such as Ayatollah Makarem Shirazi , Sheikh Hossein Ansarian , and Hujjat al-Islam Gharaati .
+
+### 4. **Text Size Adjustment**  
 You can adjust the size of the text for easier reading and a customized user experience.
 
-### 4. **Dark Mode**  
+### 5. **Dark Mode**  
 Protect your eyes in low-light environments and enjoy a more modern experience.
 
-### 5. **Dynamic Sorting**  
+### 6. **Dynamic Sorting**  
 Sort Surahs in ascending or descending order and easily access them.
 
-### 6. **Beautiful and User-Friendly Design**  
+### 7. **Beautiful and User-Friendly Design**  
 A modern design with a simple user interface that makes the app enjoyable to use for all age groups.
 
-### 7. **High Speed and Performance**  
+### 8. **High Speed and Performance**  
 Optimized for fast loading and instant responsiveness, even on lower-end devices.
 
 ### 8. **Share Verse in Another Applications**

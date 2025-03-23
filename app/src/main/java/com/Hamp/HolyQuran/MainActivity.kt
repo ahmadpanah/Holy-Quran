@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -300,7 +301,6 @@ fun VerseListScreen(
     val uthmanTahaFont = remember { FontFamily(Font(context.resources.getIdentifier("taha", "font", context.packageName))) }
     val vazirFont = remember { FontFamily(Font(context.resources.getIdentifier("vazir", "font", context.packageName))) }
 
-
     val selectedSurah = surahId?.let { id -> surahs.find { it.id == id } }
     var fontSize by remember { mutableStateOf(18.sp) }
 
@@ -315,9 +315,17 @@ fun VerseListScreen(
     var currentVerseIndex by remember { mutableStateOf(0) }
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
 
+    // LazyListState to track scroll position
+    val lazyListState = rememberLazyListState()
+
+    // Auto-scroll to the current verse when it changes
+    LaunchedEffect(currentVerseIndex) {
+        lazyListState.animateScrollToItem(currentVerseIndex)
+    }
+
     val reciters = listOf(
         Reciter(1, "مشاري بن راشد العفاسي"),
-        Reciter(2, "أبو بكر الشاطري"),
+        Reciter(2, "أبو بکر الشاطری"),
         Reciter(3, "ناصر القطامي")
     )
     var selectedReciter by remember { mutableStateOf(reciters.first()) }
@@ -525,6 +533,7 @@ fun VerseListScreen(
         }
     ) { padding ->
         LazyColumn(
+            state = lazyListState, // Pass the LazyListState here
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
